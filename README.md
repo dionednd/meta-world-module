@@ -52,7 +52,7 @@ Effects automatically disable on invisible characters.
 
 ---
 
-## **📥 Installation**
+## **Installation**
 
 1. Open your **config.ini** and look for **[Common]**
 2. Under **States**, add:
