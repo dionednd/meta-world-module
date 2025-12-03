@@ -1,0 +1,14 @@
+
+; Seal
+[Begin Action 1955555]
+LoopStart
+0,0, 0,0, 360, , A
+Interpolate Angle
+0,0, 0,0, 0, , A, 0,0, -360
+; Smoke
+[Begin Action 1966666]
+0,1, 0,0, 6, , AS0D256
+Interpolate Blend
+0,1, 0,0, 72, , A
+Interpolate Blend
+0,1, 0,0, 0, , AS0D256

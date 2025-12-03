@@ -1,0 +1,515 @@
+# == META WORLD Module v 1.0.3 == #
+#
+#	by dionednd
+#
+#	Commissioned by Zelda In A Blankey / Doug Walker
+#
+
+# == Changelog == #
+#
+#	v 0.0.1
+#	- Implemented basic Meta World Mechanic
+#
+#	v 0.0.2
+#	- Added Meta World Rejections
+#
+#	v 0.0.3
+#	- Added Attack and Defense Buff to Meta world
+#
+#	v 0.0.4
+#	- Reduced Meta world duration depending on how many times the meta world was rejected.
+#
+#	v 0.0.5
+#	- Added Meta Super Support
+#
+#	v 0.0.6
+#	- Added Glow effect whenever Meta World is active.
+#
+#	v 0.0.7
+#	- Changed the BGPalFx to remain as long as a new meta world can't be declared. (only redeclare and reject)
+#
+#	v 0.0.8
+#	- Changed Rebuttal stacks to only add during rejections
+#
+#	v 0.0.9
+#	- Added more break conditions to Meta Worlds
+#
+#	v 1.0.0
+#	- rewrote majority of the code to be as accurate mechanically to the source game.
+#
+#	v 1.0.1
+#	- changed bgpalfx to invert stage colors instead
+#
+#	v 1.0.2
+#	- Added player(1), map(MetaWorld_Active) to add support for stages. 1 = a meta world is active, 0 = no meta world
+#
+#	v 1.0.3
+#	- Added more visual effects, i couldn't rip the Umineko Golden Fantasia effects required so i just made my own.
+#	- Disabled the visual effects on invisible characters.
+#	- Added sounds
+#	- Fixed issue where players would float in the air when using Meta World Declaration/Reversal in the air
+#	- Added Speed Buff (speeds up animation for attack states.) (you can disable it just in case it causes bugs)
+
+# == How To Install == #
+#
+#	1. Open your config.ini
+#	2. look for States in [Common]
+#	3. add ", data/meta_world/meta_world.zss" to your states.
+#	4. add ", data/meta_world/meta_world_command.cns" to your cmd.
+#	5. add ", data/meta_world/meta_world.def" to your commonfx.
+
+# == Explanation == #
+#
+#	
+
+# == Constants == #
+# 
+#	MetaWorldAnimDeclare = Anim no. for declaration
+#	MetaWorldAnimReversal = Anim no. for reversal
+#
+#	MetaWorldVoiceEnabled = if enabled, voice lines are played. disabled by default
+#
+#	Declaration Voice Line
+#	MetaWorldVoiceGroupDeclare = Group ID
+#	MetaWorldVoiceIdDeclare = Index ID
+#
+#	MetaWorldVoiceGroupReversal = Group ID
+#	MetaWorldVoiceIdReversal = Index ID
+#
+#	MetaSuperState = Stateno (disables meta super if not defined)
+#	MetaSuperStateType = 0/1/2 (0 by default)
+#	0 = AIR AND GROUND
+#	1 = GROUND ONLY
+#	2 = AIR ONLY
+
+# == Functions == #
+
+[Function AngleConversionSub(R11,R12,R13,R23,R33) xangl,yangl,zangl]
+#R13
+let yangl = asin($R13)/pi*180;
+
+let y = $R12;
+let x = $R11;
+
+if ($x**2+$y**2)**0.5+$x = 0 {
+	let zangl = 180-2*atan($y/(($x**2+$y**2)**0.5-$x))/pi*180;
+} else {
+	let zangl = -2*atan($y/(($x**2+$y**2)**0.5+$x))/pi*180;
+}
+
+let y = $R23;
+let x = $R33;
+if ($x**2+$y**2)**0.5+$x = 0 {
+	let xangl = 180-2*atan($y/(($x**2+$y**2)**0.5-$x))/pi*180;
+} else {
+	let xangl = -2*atan($y/(($x**2+$y**2)**0.5+$x))/pi*180;
+}
+
+[Function AngleConversion(alpha,beta,gamma,delta) xangl,yangl,zangl]
+let alpha = $alpha*pi/180;
+let beta = $beta*pi/180;
+let gamma = $gamma*pi/180;
+let R13 = cos($alpha)*sin($beta);
+let R12 = sin($alpha)*sin($beta)*cos($gamma)-cos($beta)*sin($gamma);
+let R11 = cos($beta)*cos($gamma)+sin($alpha)*sin($beta)*sin($gamma);
+let R23 = -sin($alpha);
+let R33 = cos($alpha)*cos($beta);
+if $delta != 0 {
+	let delta = $delta*pi/180;
+	let R21 = cos($alpha)*sin($gamma);
+	let R22 = cos($alpha)*cos($gamma);
+	
+	#let R11 = cos($delta)*$R11+sin($delta)*$R12;
+	#let R12 = -sin($delta)*$R11+cos($delta)*$R12;
+	
+	let R11 = cos($delta)*$R11-sin($delta)*$R21;
+	let R12 = cos($delta)*$R12-sin($delta)*$R22;
+	let R13n = cos($delta)*$R13-sin($delta)*$R23;
+	let R23 = sin($delta)*$R13+cos($delta)*$R23;
+	
+	let R13 = $R13n;
+}
+
+let xangl,yangl,zangl = call AngleConversionSub($R11,$R12,$R13,$R23,$R33);
+
+[Function GetColorRGB(cs,mul) retR,retG,retB]
+if $cs = 0{
+	let retR = cond(ishelper,root,map(eff_0_r),map(eff_0_r));
+	let retG = cond(ishelper,root,map(eff_0_g),map(eff_0_g));
+	let retB = cond(ishelper,root,map(eff_0_b),map(eff_0_b));
+}else if $cs = 1{
+	let retR = cond(ishelper,root,map(eff_1_r),map(eff_1_r));
+	let retG = cond(ishelper,root,map(eff_1_g),map(eff_1_g));
+	let retB = cond(ishelper,root,map(eff_1_b),map(eff_1_b));
+}else if $cs = 2{
+	let retR = cond(ishelper,root,map(eff_2_r),map(eff_2_r));
+	let retG = cond(ishelper,root,map(eff_2_g),map(eff_2_g));
+	let retB = cond(ishelper,root,map(eff_2_b),map(eff_2_b));
+}else if $cs = 3{
+	let retR = cond(ishelper,root,map(eff_3_r),map(eff_3_r));
+	let retG = cond(ishelper,root,map(eff_3_g),map(eff_3_g));
+	let retB = cond(ishelper,root,map(eff_3_b),map(eff_3_b));
+}else if $cs = 4{
+	let retR = cond(ishelper,root,map(eff_4_r),map(eff_4_r));
+	let retG = cond(ishelper,root,map(eff_4_g),map(eff_4_g));
+	let retB = cond(ishelper,root,map(eff_4_b),map(eff_4_b));
+}else if $cs = 5{
+	let retR = cond(ishelper,root,map(eff_5_r),map(eff_5_r));
+	let retG = cond(ishelper,root,map(eff_5_g),map(eff_5_g));
+	let retB = cond(ishelper,root,map(eff_5_b),map(eff_5_b));
+}else {
+	let retR = 256;
+	let retG = 256;
+	let retB = 256;
+}
+let retR = $retR*$mul/256;
+let retG = $retG*$mul/256;
+let retB = $retB*$mul/256;
+
+[Function GeneralEffectExplod2(a,cs,mul, px, py,sx,sy,ang,xang,yang,sprp)]
+if $xang != 0 && $yang != 0 {
+	let xang,yang,ang = call AngleConversion($xang,$yang,360-$ang,0);
+	let ang = 360-$ang;
+}
+let xang = 360-$xang;
+let yang = 360-$yang;
+let r,g,b = call GetColorRGB($cs,$mul);
+Explod{anim:MW $a;Id:$a;pos:$px,$py;postype:p1;scale:$sx,$sy;angle:$ang;xangle:$xang;yangle:$yang;facing:facing;sprpriority:$sprp;ignorehitpause:1;ownpal:1;palfx.time:-1;palfx.mul:$r,$g,$b;projection:perspective2;focallength:1331*$sy;removetime:-1}
+[Function GeneralEffectExplod3(a,cs,mul, px, py,sx,sy,ang,xang,yang,sprp,velx,vely,accelx,accely,randomx,randomy)]
+if $xang != 0 && $yang != 0 {
+	let xang,yang,ang = call AngleConversion($xang,$yang,360-$ang,0);
+	let ang = 360-$ang;
+}
+let xang = 360-$xang;
+let yang = 360-$yang;
+let r,g,b = call GetColorRGB($cs,$mul);
+Explod{anim:MW $a;Id:$a;pos:$px,$py;postype:p1;scale:$sx,$sy;angle:$ang;xangle:$xang;yangle:$yang;facing:facing;sprpriority:$sprp;ignorehitpause:1;ownpal:1;palfx.time:-1;palfx.mul:$r,$g,$b;projection:perspective2;focallength:1331*$sy;vel:$velx,$vely;accel:$accelx,$accely;random:$randomx,$randomy}
+
+[Function glow(alpha,quality,size,r,g,b, p, id, ignorehit, movehitpause)] 
+#alpha, quality, size, r, g, b, sprpriority, updatehitpause, movehitpause
+
+#alpha: 		controls the opacity of explods
+#quality: 		controls distribution of the explod scattering (divided by 10 and then multiplied by nested loop)
+#size: 			glow radius;
+#r,g,b: 		colors;
+#sprpriority: 	sprpriority of the explods (usually smaller than 0);
+#ignorehit: 	updates the anim during hitpause;
+#movehitpause: 	lets the explod run during hitpause (controls ignorehitpause parameter on explods)
+
+ignoreHitPause{
+	let a = $alpha;
+	let q = $quality/10;
+	if ((hitPauseTime && $ignorehit) || !hitPauseTime || isAsserted(animatehitpause)) && !pauseTime{
+		map(glow.frame) := animElemNo(0);
+	}
+	removeExplod{id: $id;}
+	for i = 0; $q; 1 {
+		for h = 0; $q; 1
+		{
+			if (($h%2 = 0 && $i%2 = 0) || ($h%2 = 1 && $i%2 = 1)) && (gameTime%2 = 0)
+			{
+				explod{
+					anim: anim; 
+					id: $id; 
+					animplayerno: animplayerno; #ty P.O.T.S for help w/ this lol
+					postype: p1;          
+					bindtime: 1;            
+					sprpriority: $p; 
+					pos: -($size/2)+$h*($size/$q), -($size/2)+$i*($size/$q);
+					removetime: 2;          # refresh loop
+					animelem: map(glow.frame);
+					pausemovetime: -1;
+					supermovetime: -1;
+					scale: 1 * const(size.xscale) * (scale x), 1 * const(size.yscale) * (scale y);
+					trans: addalpha;
+					alpha: $a,255-$a;
+					ownpal: 1;
+					under: 1;
+					angle: angle;
+					palfx.time: -1;
+					palfx.add: 256,256,256;
+					palfx.mul: $r,$g,$b;
+					ignorehitpause: $movehitpause;
+				}
+			}
+
+			if (($h%2 = 0 && $i%2 = 1) || ($h%2 = 1 && $i%2 = 0)) && (gameTime%2 = 1)
+			{
+				explod{
+					anim: anim; 
+					id: $id; 
+					animplayerno: animplayerno; 
+					postype: p1; 
+					bindtime: 1; 
+					sprpriority: $p; 
+					pos: -($size/2)+$h*($size/$q), -($size/2)+$i*($size/$q);
+					removetime: 2; 
+					animelem: map(glow.frame);
+					pausemovetime: -1;
+					supermovetime: -1;
+					scale: 1 * const(size.xscale) * (scale x), 1 * const(size.yscale) * (scale y);
+					trans: addalpha;
+					alpha: $a,255-$a;
+					ownpal: 1;
+					under: 1;
+					angle: angle;
+					palfx.time: -1;
+					palfx.add: 256,256,256;
+					palfx.mul: $r,$g,$b;
+					ignorehitpause: $movehitpause;
+				}
+			}
+		}
+	}
+}
+
+# == Normal States == #
+
+[StateDef 1955555; type: S; movetype: I; physics: S; ctrl: 0; velset: 0, 0; sprpriority: 2;]
+
+if time = 0
+{
+	player(1), map(metaWorld_activeWorld) := playerno;
+	if prevstateno != 1955555
+	{
+		if player(1), map(metaWorld_Owner) = playerno
+		{
+			if SelfAnimExist(cond(Const(MetaWorldAnimDeclare),Const(MetaWorldAnimDeclare),195))
+			{
+				ChangeAnim{value: cond(Const(MetaWorldAnimDeclare),Const(MetaWorldAnimDeclare),195)}
+			}
+		}
+		else if player(1), map(metaWorld_Owner) != playerno
+		{
+			if SelfAnimExist(cond(Const(MetaWorldAnimReversal),Const(MetaWorldAnimReversal),195))
+			{
+				ChangeAnim{value: cond(Const(MetaWorldAnimReversal),Const(MetaWorldAnimReversal),195)}
+			}
+		}
+	}
+	if isAsserted(animatehitpause) && !pauseTime {
+		let ae = animElemNo(0);
+	}
+
+	# remember the most recent player that used this command
+		player(1), map(metaWorld_activeWorld) := playerno;
+
+	if Const(MetaWorldVoiceEnabled)
+	{
+		if player(1), map(metaWorld_Owner) = playerno
+		{
+			# play voiceline for declaring a meta world
+			Playsnd{value: S Const(MetaWorldVoiceGroupDeclare), Const(MetaWorldVoiceIdDeclare); channel: 1}
+		}
+		else if player(1), map(metaWorld_Owner) != playerno
+		{
+			# play voiceline for rejecting a meta world
+			Playsnd{value: S Const(MetaWorldVoiceGroupReversal), Const(MetaWorldVoiceIdReversal); channel: 1}
+		}
+	}
+	SuperPause{time: AnimLength+player(1), map(metaWorld_declarationFrameAdvantage);movetime:AnimLength+player(1), map(metaWorld_declarationFrameAdvantage); anim: F player(1), map(metaWorld_animId); sound: player(1), map(metaWorld_sfxGroup), player(1), map(metaWorld_sfxId); pos: player(1), map(metaWorld_animPosX), player(1), map(metaWorld_animPosY); unhittable: 1;}
+	# Cut In
+	#if numexplod(1977777) = 0
+	#{
+		#Explod{anim:anim;animelem:$ae;animfreeze:1;removetime:animlength;Id:1977777;pos:cond(facing = 1,0,const240p(360)),(120+(const(size.head.pos.y)*-2))*2 * const(size.yscale)* (scale y);postype:left;scale:2 * const(size.xscale) * (scale x), 2 * const(size.yscale) * (scale y);facing:facing;sprpriority:-3;ignorehitpause:1;supermovetime:animlength;vel:1.5*facing,0;accel:0.015*(facing*-1),0}
+	#}
+}
+
+if animtime = 0
+{
+	# EnvShake
+	EnvShake{time:8;freq:60;ampl:-2;phase:90}
+	ChangeState{value: cond(prevstatetype!=A,0,51);ctrl:1}
+}
+
+# == Global States == #
+
+[StateDef -4]
+if playerno < 9 && !isHelper && roundstate < 2
+{
+
+	# Settings
+
+	# Meta World Declaration frame advantage
+	player(1), map(metaWorld_declarationFrameAdvantage) := 4; # source accurate?
+
+	# Meta World FightFX Anim ID (pulled from fightfx.air)
+	player(1), map(metaWorld_animId) := 102;
+
+	# Meta World FightFX Anim X Position
+	player(1), map(metaWorld_animPosX) := 0;
+
+	# Meta World FightFX Anim Y Position
+	player(1), map(metaWorld_animPosY) := -60;
+
+	# Meta World Sound FX Group ID (pulled from common.snd)
+	player(1), map(metaWorld_sfxGroup) := 20;
+
+	# Meta World Sound FX Index ID (pulled from common.snd)
+	player(1), map(metaWorld_sfxId) := 0;
+
+	# Meta World Declaration Cost (only used for the declaration, not redeclarations)
+	player(1), map(metaWorld_declarationCost) := 1000;
+
+	# Meta World Reversal Cost (used for reversals and redeclarations)
+	player(1), map(metaWorld_reversalCost) := 2000;
+
+	# Meta World Duration (480, which should be 8 seconds)
+	player(1), map(metaWorld_baseDuration) := 480;
+
+	# Meta World Reversal Duration Reduction
+	player(1), map(metaWorld_reversalReduction) := 0.25; # reduce duration by 25%
+
+	# Meta World Damage Given Multiplier
+	player(1), map(metaWorld_atkMul) := 2.0;
+
+	# Meta World Damage Taken Multiplier
+	player(1), map(metaWorld_defMul) := 0.5;
+
+	# Meta World Frame Speed Buff (speeds up attack states if 1.)
+	player(1), map(metaWorld_speedbuff) := 1;
+
+	# Meta Super Power Cost
+	player(1), map(metaSuper_Cost) := 0; #in the og game, a meta super is free.
+
+	# DO NOT CHANGE THESE
+
+	# Values that can be changed during gameplay will be reset every round.
+	removeExplod{id:1955555;redirectid:player(player(1), map(metaWorld_Owner)), id}
+	player(1), map(metaWorld_activeWorld) := 0;
+	player(1), map(metaWorld_Owner) := 0;
+	player(1), map(metaWorld_rebuttals) := 0;
+	player(1), map(metaWorld_activeDuration) := 0;
+	player(1), map(MetaWorld_Active) := 0;
+	#map(attack_) := Const(data.attack);
+	#map(defence_) := Const(data.defence);
+	AttackMulSet{value: 1.0}
+	DefenceMulSet{value: 1.0}
+}
+
+[StateDef +1]
+ignorehitpause if playerno < 9 && !isHelper && roundstate = 2 {
+
+	if command = "MetaWorld" # command was executed
+	&& player(1), map(metaWorld_activeWorld) != playerno # if the most recent player that used this command isn't the one executing the command
+	&& power >= cond(player(1), map(metaWorld_activeWorld) = 0, player(1), map(metaWorld_declarationCost), player(1), map(metaWorld_reversalCost)) # has enough meter
+	&& cond(player(1), map(metaWorld_Owner) != 0, player(player(1), map(metaWorld_Owner)), stateno = 1955555 || player(player(1), map(metaWorld_activeWorld)), stateno = 1955555, 1) #still in debate state or no meta world has been declared yet
+	&& ((player(1), map(metaWorld_rebuttals) <= 2 && player(1), map(metaWorld_Owner) = playerno) || (player(1), map(metaWorld_rebuttals) < 2 && player(1), map(metaWorld_Owner) != playerno)) # can still debate
+	{
+		#interrupt any superpause
+		modifyPlayer{supermovetime: 1}
+		#modifyPlayer{supermovetime: 1; redirectId: player(player(1), map(metaWorld_activeWorld)), id}
+		if player(1), map(metaWorld_activeWorld) = 0
+		{
+			# declaration
+
+			# cost of the declaration
+			poweradd{value: player(1), map(metaWorld_declarationCost) * -1}
+
+			# remember the player that declared the meta world
+			player(1), map(metaWorld_Owner) := playerno;
+
+			#ModifyPlayer{attack: map(attack_) * player(1), map(metaWorld_atkMul); defence: map(defence_) * player(1), map(metaWorld_defMul);}
+
+		}
+		else if player(1), map(metaWorld_activeWorld) != 0
+		{
+			# cost after the declaration
+			poweradd{value: player(1), map(metaWorld_reversalCost) * -1}
+
+			# reversal
+			if player(1), map(metaWorld_Owner) != playerno
+			{
+				player(1), map(metaWorld_rebuttals) := player(1), map(metaWorld_rebuttals) + 1;
+
+			}
+			# redeclaration
+			else if player(1), map(metaWorld_Owner) = playerno
+			{
+				#IDK WHAT TO DO HERE YET
+			}
+		}
+
+		# declaration
+		player(1), map(metaWorld_activeDuration) := player(1), map(metaWorld_baseDuration) * (1 - (0.25 * player(1), map(metaWorld_rebuttals)));
+
+		changeState{value:1955555}
+	}
+
+	if player(1), map(metaWorld_activeWorld) != 0
+	{
+		assertspecial{flag:timerfreeze;}
+	}
+
+	if player(1), map(metaWorld_activeWorld) = player(1), map(metaWorld_Owner) && player(1), map(metaWorld_activeWorld) = playerno && player(1), map(metaWorld_activeDuration) > 0
+	{
+
+		AttackMulSet{value: player(1), map(metaWorld_atkMul)}
+		DefenceMulSet{value: player(1), map(metaWorld_defMul)}
+		if stateno != 1955555 # Drain the time only when out of the meta world debate state
+		{
+
+			# Speed buff
+			if MoveType = A
+			&& AnimElemTime(AnimElemNo(0) + 1) < 0
+			&& AnimElemTime(AnimElemNo(0)) > floor ((AnimElemTime(AnimElemNo(0)) - AnimElemTime(AnimElemNo(0) + 1))/2)
+			&& player(1), map(metaWorld_speedbuff) = 1
+			{
+				ChangeAnim{value: anim;elem: AnimElemNo(0) + 1;}
+			}
+
+			if !numexplod(1955555) {
+				call GeneralEffectExplod2(1955555,-1,256,0,0,.5,.5,0,275.724,0,-2);
+			}
+			if numexplod(1966666) < 32 && gameTime % 4 = 0 && !isAsserted(invisible) {
+				call GeneralEffectExplod3(1966666,-1,256,0,(pos y + vel y) * -1,.25,.25,0,360,0,-2,randomRange(-0.3,0.3),randomRange(-0.1,-0.3),randomRange(-0.1,0.1),-0.01,121,21);
+			}
+			ModifyExplod{Id:1955555;palfx.time:-1;palfx.mul:175 + 175*cos(gameTime * 0.1),180 + 180* sin (gameTime * 0.08),180 + 180 * cos (gameTime * 0.05 +45);pos: 0, (pos y + vel y) * -1;postype:p1}
+			player(1), map(MetaWorld_Active) := 1;
+			BGPalFX{time: 2; invertall:1}
+			call glow(35, 30, 5.5, 175 + 175*cos(gameTime * 0.1),180 + 180* sin (gameTime * 0.08),180 + 180 * cos (gameTime * 0.05 +45), 1, 92000, 1, 1);
+			if player(1), map(metaWorld_activeDuration) % 4 = 0 # heals the player every 4 frames
+			&& movetype != H #player isn't getting hit
+			{
+				lifeAdd{value: 1}
+			}
+			# count down the timer
+			player(1), map(metaWorld_activeDuration) := player(1), map(metaWorld_activeDuration) - 1;
+		}
+		if command = "MetaSuper"
+		&& ctrl && power >= player(1), map(metaSuper_Cost)
+		&& Const(MetaSuperState) # Meta super is only available if the meta super state is defined in the character's [Constant].
+		&& ((Const(MetaSuperStateType) = 0)
+		|| (Const(MetaSuperStateType) = 1 && StateType != A)
+		|| (Const(MetaSuperStateType) = 2 && StateType = A))
+		{
+			poweradd{value: player(1), map(metaSuper_Cost) * -1}
+			ChangeState{value: Const(MetaSuperState);} # make sure that your meta super state doesn't reduce your meter
+		}
+	}
+
+	if numexplod(1966666) > 0
+	{
+		ModifyExplod{Id:1966666;palfx.time:-1;palfx.mul:175 + 175*cos(gameTime * 0.1),180 + 180* sin (gameTime * 0.08),180 + 180 * cos (gameTime * 0.05 +45);}
+	}
+
+	if numexplod(1955555) && isAsserted(invisible)
+	{
+		removeExplod{id:1955555;redirectid:player(player(1), map(metaWorld_Owner)), id}
+	}
+	
+	if (player(1), map(metaWorld_activeWorld) = player(1), map(metaWorld_Owner) && player(1), map(metaWorld_activeDuration) <= 0) # destroy meta world if duration is over
+	|| (player(player(1), map(metaWorld_activeWorld)), stateno != 1955555 && player(1), map(metaWorld_activeWorld) != player(1), map(metaWorld_Owner)) # destroy meta world if debate state is over and owner lost
+	{
+		# reset these values whenever the meta world breaks.
+		removeExplod{id:1955555;redirectid:player(player(1), map(metaWorld_Owner)), id}
+		player(1), map(metaWorld_activeWorld) := 0;
+		player(1), map(metaWorld_Owner) := 0;
+		player(1), map(metaWorld_rebuttals) := 0;
+		player(1), map(metaWorld_activeDuration) := 0;
+		player(1), map(MetaWorld_Active) := 0;
+		AttackMulSet{value: 1.0;redirectId: player(player(1), map(metaWorld_Owner)), id}
+		DefenceMulSet{value: 1.0;redirectId: player(player(1), map(metaWorld_Owner)), id}
+		#ModifyPlayer{attack: map(attack_); defence: map(defence_);redirectId: player(player(1), map(metaWorld_Owner)), id}
+	}
+}

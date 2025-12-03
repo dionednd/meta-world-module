@@ -1,0 +1,11 @@
+[Command]
+name = "MetaWorld"
+command = a+b+c
+time = 1
+buffer.time = 1
+
+[Command]
+name = "MetaSuper"
+command = ~F,B, DB, D, DF, F, c
+time = 1
+buffer.time = 1
