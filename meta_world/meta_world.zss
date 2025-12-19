@@ -466,6 +466,7 @@ ignorehitpause if playerno < 9 && !isHelper && roundstate = 2 {
 			}
 			ModifyExplod{Id:1955555;palfx.time:-1;palfx.mul:175 + 175*cos(gameTime * 0.1),180 + 180* sin (gameTime * 0.08),180 + 180 * cos (gameTime * 0.05 +45);pos: 0, (pos y + vel y) * -1;postype:p1}
 			player(1), map(MetaWorld_Active) := 1;
+			player(1), map(_vnix_meta_invert) := 1;
 			BGPalFX{time: 2; invertall:1}
 			call glow(35, 30, 5.5, 175 + 175*cos(gameTime * 0.1),180 + 180* sin (gameTime * 0.08),180 + 180 * cos (gameTime * 0.05 +45), 1, 92000, 1, 1);
 			if player(1), map(metaWorld_activeDuration) % 4 = 0 # heals the player every 4 frames
@@ -508,8 +509,10 @@ ignorehitpause if playerno < 9 && !isHelper && roundstate = 2 {
 		player(1), map(metaWorld_rebuttals) := 0;
 		player(1), map(metaWorld_activeDuration) := 0;
 		player(1), map(MetaWorld_Active) := 0;
+		player(1), map(_vnix_meta_invert) := 0;
 		AttackMulSet{value: 1.0;redirectId: player(player(1), map(metaWorld_Owner)), id}
 		DefenceMulSet{value: 1.0;redirectId: player(player(1), map(metaWorld_Owner)), id}
 		#ModifyPlayer{attack: map(attack_); defence: map(defence_);redirectId: player(player(1), map(metaWorld_Owner)), id}
 	}
+
 }
